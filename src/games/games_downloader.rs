@@ -9,7 +9,7 @@ use crate::{
     Session,
     auth::auth::GogTokenResponse,
     constants::constants::{GOG_CDN_URL, GOG_CONTENT_SYSTEM_URL},
-    session::session::{self, SessionError},
+    session::session::SessionError,
 };
 
 pub struct GamesDownloader {
