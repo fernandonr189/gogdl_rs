@@ -8,3 +8,5 @@ pub const GOG_LAYOUT: &str = "client2";
 pub const GOG_AUTH_GRANT_TYPE: &str = "authorization_code";
 pub const GOG_REFRESH_GRANT_TYPE: &str = "refresh_token";
 pub const GOG_LOGIN_URL: &str = "https://auth.gog.com/auth?client_id=46899977096215655&redirect_uri=https://embed.gog.com/on_login_success?origin=client&response_type=code&layout=client2";
+pub const GOG_CONTENT_SYSTEM_URL: &str = "https://content-system.gog.com";
+pub const GOG_EMBED_URL: &str = "https://embed.gog.com";

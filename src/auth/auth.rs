@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
 use crate::{
-    auth::constants::{
+    constants::constants::{
         GOG_AUTH_GRANT_TYPE, GOG_AUTH_URL, GOG_CLIENT_ID, GOG_CLIENT_SECRET, GOG_LOGIN_URL,
         GOG_REDIRECT_URI, GOG_REFRESH_GRANT_TYPE,
     },
