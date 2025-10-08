@@ -6,4 +6,5 @@ pub mod user;
 
 pub use auth::auth::Auth;
 pub use games::games_downloader::GamesDownloader;
+pub use games::games_downloader::GogDbGameDetails;
 pub use session::session::Session;

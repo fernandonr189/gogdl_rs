@@ -16,9 +16,9 @@ pub struct User {
 }
 
 impl User {
-    pub fn new(session: Session, token: &GogTokenResponse) -> Self {
+    pub fn new(session: &Session, token: &GogTokenResponse) -> Self {
         User {
-            session,
+            session: session.clone(),
             token: Arc::new(Mutex::new(token.clone())),
             owned_games: None,
         }

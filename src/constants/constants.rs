@@ -11,3 +11,8 @@ pub const GOG_LOGIN_URL: &str = "https://auth.gog.com/auth?client_id=46899977096
 pub const GOG_CONTENT_SYSTEM_URL: &str = "https://content-system.gog.com";
 pub const GOG_EMBED_URL: &str = "https://embed.gog.com";
 pub const GOG_CDN_URL: &str = "https://cdn.gog.com";
+pub const GOG_DB_URL: &str = "https://www.gogdb.org";
+
+pub fn get_login_url() -> String {
+    GOG_LOGIN_URL.to_owned()
+}

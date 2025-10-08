@@ -19,11 +19,16 @@ pub struct Auth {
 }
 
 impl Auth {
-    pub fn new(session: Session) -> Self {
+    pub fn new(session: &Session) -> Self {
         Auth {
-            session,
+            session: session.clone(),
             token: None,
         }
+    }
+    pub async fn get_token(&self) -> Result<GogTokenResponse, AuthError> {
+        let token = self.token.as_ref().ok_or(AuthError::NoAuthToken)?;
+        let token = token.lock().await;
+        Ok(token.clone())
     }
     pub fn recover_session(&mut self, token: &GogTokenResponse) {
         self.token = Some(Arc::new(Mutex::new(token.clone())));
@@ -47,9 +52,6 @@ impl Auth {
 
         self.token = Some(Arc::new(Mutex::new(response)));
         Ok(())
-    }
-    pub async fn get_login_url(&self) -> String {
-        GOG_LOGIN_URL.to_owned()
     }
     pub async fn refresh_token(&mut self) -> Result<(), AuthError> {
         let refresh_token = {

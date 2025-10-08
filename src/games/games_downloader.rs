@@ -8,7 +8,7 @@ use tokio::sync::Mutex;
 use crate::{
     Session,
     auth::auth::GogTokenResponse,
-    constants::constants::{GOG_CDN_URL, GOG_CONTENT_SYSTEM_URL},
+    constants::constants::{GOG_CDN_URL, GOG_CONTENT_SYSTEM_URL, GOG_DB_URL},
     session::session::SessionError,
 };
 
@@ -18,11 +18,24 @@ pub struct GamesDownloader {
 }
 
 impl GamesDownloader {
-    pub fn new(session: Session, token: &GogTokenResponse) -> Self {
+    pub fn new(session: &Session, token: &GogTokenResponse) -> Self {
         GamesDownloader {
-            session,
+            session: session.clone(),
             token: Arc::new(Mutex::new(token.clone())),
         }
+    }
+    pub async fn get_game_details(&self, game_id: &str) -> Result<GogDbGameDetails, SessionError> {
+        let url = Url::parse(&format!(
+            "{}/data/products/{}/product.json",
+            GOG_DB_URL, game_id
+        ))
+        .unwrap();
+        let response = self
+            .session
+            .get_json::<GogDbGameDetails>(url, None, false)
+            .await?;
+
+        Ok(response)
     }
     pub async fn get_builds_data(&self, game_id: &str) -> Result<GameBuildsData, SessionError> {
         let url = Url::parse(&format!(
@@ -84,6 +97,14 @@ impl GamesDownloader {
             .await?;
         Ok(secure_link_response)
     }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GogDbGameDetails {
+    pub title: Option<String>,
+    pub image_boxart: Option<String>,
+    #[serde(rename = "type")]
+    pub product_type: Option<String>,
 }
 
 #[derive(Deserialize, Debug)]
