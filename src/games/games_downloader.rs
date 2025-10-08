@@ -24,7 +24,7 @@ impl GamesDownloader {
             token: Arc::new(Mutex::new(token.clone())),
         }
     }
-    pub async fn get_game_details(&self, game_id: &str) -> Result<GogDbGameDetails, SessionError> {
+    pub async fn get_game_details(&self, game_id: u64) -> Result<GogDbGameDetails, SessionError> {
         let url = Url::parse(&format!(
             "{}/data/products/{}/product.json",
             GOG_DB_URL, game_id
