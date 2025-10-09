@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use chrono::{DateTime, FixedOffset};
 use reqwest::Url;
-use serde::Deserialize;
-use tokio::sync::Mutex;
+use serde::{Deserialize, Serialize};
+use tokio::sync::{Mutex, mpsc::UnboundedSender};
 
 use crate::{
     Session,
@@ -12,6 +12,7 @@ use crate::{
     session::session::SessionError,
 };
 
+#[derive(Clone)]
 pub struct GamesDownloader {
     session: Session,
     token: Arc<Mutex<GogTokenResponse>>,
@@ -23,6 +24,23 @@ impl GamesDownloader {
             session: session.clone(),
             token: Arc::new(Mutex::new(token.clone())),
         }
+    }
+    pub async fn download_chunk(
+        &self,
+        cdns: &Vec<Cdn>,
+        chunk_hash: &str,
+        tx: UnboundedSender<i32>,
+    ) -> Result<(), SessionError> {
+        let url = cdns[0].parse_url(chunk_hash);
+        let _fallback_url = cdns[1].parse_url(chunk_hash);
+        println!("{}", url);
+
+        self.session
+            .download_chunk(Url::parse(&url).unwrap(), |i| {
+                tx.send(i).unwrap();
+            })
+            .await?;
+        Ok(())
     }
     pub async fn get_game_details(&self, game_id: u64) -> Result<GogDbGameDetails, SessionError> {
         let url = Url::parse(&format!(
@@ -37,7 +55,7 @@ impl GamesDownloader {
 
         Ok(response)
     }
-    pub async fn get_builds_data(&self, game_id: &str) -> Result<GameBuildsData, SessionError> {
+    pub async fn get_builds_data(&self, game_id: u64) -> Result<GameBuildsData, SessionError> {
         let url = Url::parse(&format!(
             "{}/products/{}/os/windows/builds?generation=2",
             GOG_CONTENT_SYSTEM_URL, game_id
@@ -81,7 +99,7 @@ impl GamesDownloader {
     }
     pub async fn get_secure_links(
         &self,
-        game_id: &str,
+        game_id: u64,
     ) -> Result<SecureLinksResponse, SessionError> {
         let url = Url::parse(&format!(
             "{}/products/{}/secure_link?generation=2&_version=2&path=/",
@@ -99,32 +117,81 @@ impl GamesDownloader {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct GogDbGameDetails {
     pub title: Option<String>,
     pub image_boxart: Option<String>,
     #[serde(rename = "type")]
     pub product_type: Option<String>,
+    pub game_id: Option<u64>,
 }
 
-#[derive(Deserialize, Debug)]
+impl GogDbGameDetails {
+    pub fn set_id(&mut self, id: u64) {
+        self.game_id = Some(id);
+    }
+}
+
+#[derive(Deserialize, Debug, Clone)]
 pub struct SecureLinksResponse {
     pub product_id: u64,
     pub urls: Vec<Cdn>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
+pub struct CdnUrlParams {
+    pub base_url: String,
+    pub path: String,
+    pub token: String,
+    pub expires_at: Option<u64>,
+    pub dirs: Option<u64>,
+    pub ttl: Option<u64>,
+    pub source: Option<String>,
+    pub gog_token: Option<String>,
+    pub l: Option<String>,
+}
+
+#[derive(Deserialize, Debug, Clone)]
 pub struct Cdn {
     pub url_format: String,
     pub parameters: CdnUrlParams,
     pub priority: u64,
 }
+impl Cdn {
+    pub fn parse_url(&self, chunk_hash: &str) -> String {
+        let mut url = self.url_format.clone();
+        url = url.replace("{path}", &self.parameters.path);
+        url = url.replace("{token}", &self.parameters.token);
+        url = url.replace("{base_url}", &self.parameters.base_url);
 
-#[derive(Deserialize, Debug)]
-pub struct CdnUrlParams {
-    pub base_url: String,
-    pub path: String,
-    pub token: String,
+        if let Some(expires_at) = self.parameters.expires_at {
+            url = url.replace("{expires_at}", &expires_at.to_string());
+        }
+        if let Some(dirs) = self.parameters.dirs {
+            url = url.replace("{dirs}", &dirs.to_string());
+        }
+        if let Some(ttl) = self.parameters.ttl {
+            url = url.replace("{ttl}", &ttl.to_string());
+        }
+        if let Some(source) = &self.parameters.source {
+            url = url.replace("{source}", source);
+        }
+        if let Some(gog_token) = &self.parameters.gog_token {
+            url = url.replace("{gog_token}", gog_token);
+        }
+        if let Some(l) = &self.parameters.l {
+            url = url.replace("{l}", l);
+        }
+        let galaxy_path = format!(
+            "/{}/{}/{}",
+            &chunk_hash[0..2],
+            &chunk_hash[2..4],
+            chunk_hash
+        );
+        url = format!("{}{}", url, galaxy_path);
+
+        url
+    }
 }
 
 #[derive(Deserialize, Debug)]
@@ -143,6 +210,31 @@ pub struct DepotFile {
     pub path: String,
     #[serde(rename = "type")]
     pub file_type: String,
+    pub chunks: Vec<Chunk>,
+    pub sha256: Option<String>,
+}
+
+impl DepotFile {
+    pub fn get_size(&self) -> u64 {
+        self.chunks.iter().map(|chunk| chunk.size).sum()
+    }
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct Chunk {
+    pub md5: String,
+    pub size: u64,
+    #[serde(rename = "compressedMd5")]
+    pub compressed_md5: String,
+    #[serde(rename = "compressedSize")]
+    pub compressed_size: u64,
+    pub order: Option<i32>,
+}
+
+impl Chunk {
+    pub fn set_order(&mut self, order: i32) {
+        self.order = Some(order);
+    }
 }
 
 #[derive(Deserialize, Debug)]

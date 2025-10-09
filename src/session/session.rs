@@ -1,7 +1,7 @@
-use std::{error::Error, fmt::Display, io::Read};
-
 use flate2::read::ZlibDecoder;
+use futures_util::StreamExt;
 use reqwest::{StatusCode, Url};
+use std::{error::Error, fmt::Display, io::Read};
 
 #[derive(Clone)]
 pub struct Session {
@@ -13,6 +13,22 @@ impl Session {
         Session {
             session: reqwest::Client::new(),
         }
+    }
+    pub async fn download_chunk<F>(&self, url: Url, callback: F) -> Result<(), SessionError>
+    where
+        F: Fn(i32),
+    {
+        let mut stream = match self.session.get(url).send().await {
+            Ok(response) => response.bytes_stream(),
+
+            Err(err) => return Err(SessionError::NetworkError(err.to_string())),
+        };
+        while let Some(chunk) = stream.next().await {
+            if let Ok(chunk) = chunk {
+                callback(chunk.len() as i32);
+            }
+        }
+        Ok(())
     }
     pub async fn get_json<T>(
         &self,
