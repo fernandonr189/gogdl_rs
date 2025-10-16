@@ -18,14 +18,27 @@ impl Session {
     where
         F: Fn(i32),
     {
-        let mut stream = match self.session.get(url).send().await {
-            Ok(response) => response.bytes_stream(),
+        let response = self
+            .session
+            .get(url)
+            .send()
+            .await
+            .map_err(|err| SessionError::NetworkError(err.to_string()))?;
 
-            Err(err) => return Err(SessionError::NetworkError(err.to_string())),
-        };
-        while let Some(chunk) = stream.next().await {
-            if let Ok(chunk) = chunk {
-                callback(chunk.len() as i32);
+        if !response.status().is_success() {
+            return Err(SessionError::NetworkError(format!(
+                "Unexpected status: {}",
+                response.status()
+            )));
+        }
+
+        let mut stream = response.bytes_stream();
+        while let Some(item) = stream.next().await {
+            match item {
+                Ok(chunk) => callback(chunk.len() as i32),
+                Err(e) => {
+                    return Err(SessionError::NetworkError(e.to_string()));
+                }
             }
         }
         Ok(())
@@ -80,6 +93,7 @@ pub enum SessionError {
     NetworkError(String),
     DeserializationError(String),
     DecompressionError(String),
+    DownloadError(String),
 }
 
 impl Display for SessionError {
@@ -89,6 +103,7 @@ impl Display for SessionError {
             SessionError::NetworkError(err) => write!(f, "Network error: {}", err),
             SessionError::DeserializationError(err) => write!(f, "Deserialization error: {}", err),
             SessionError::DecompressionError(err) => write!(f, "Decompression error: {}", err),
+            SessionError::DownloadError(err) => write!(f, "Download error: {}", err),
         }
     }
 }

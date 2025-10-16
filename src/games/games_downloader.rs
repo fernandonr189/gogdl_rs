@@ -30,17 +30,29 @@ impl GamesDownloader {
         cdns: &Vec<Cdn>,
         chunk_hash: &str,
         tx: UnboundedSender<i32>,
+        is_gog_depot: bool,
     ) -> Result<(), SessionError> {
-        let url = cdns[0].parse_url(chunk_hash);
-        let _fallback_url = cdns[1].parse_url(chunk_hash);
-        println!("{}", url);
+        for cdn in cdns {
+            let url = cdn.parse_url(chunk_hash);
 
-        self.session
-            .download_chunk(Url::parse(&url).unwrap(), |i| {
-                tx.send(i).unwrap();
-            })
-            .await?;
-        Ok(())
+            match self
+                .session
+                .download_chunk(Url::parse(&url).unwrap(), |i| {
+                    tx.send(i).unwrap();
+                })
+                .await
+            {
+                Ok(_) => return Ok(()),
+                Err(e) => {
+                    println!("Error: {}, trying again", e);
+                    println!("Url: {}", url);
+                    continue;
+                }
+            }
+        }
+        Err(SessionError::DownloadError(
+            "All CDN attempts failed".to_string(),
+        ))
     }
     pub async fn get_game_details(&self, game_id: u64) -> Result<GogDbGameDetails, SessionError> {
         let url = Url::parse(&format!(
@@ -81,20 +93,22 @@ impl GamesDownloader {
             .await?;
         Ok(metadata)
     }
-    pub async fn get_depot_information(
-        &self,
-        depot_manifest: &str,
-    ) -> Result<DepotInfo, SessionError> {
+    pub async fn get_depot_information(&self, depot: &Depots) -> Result<DepotInfo, SessionError> {
         let url = Url::parse(&format!(
             "{}/content-system/v2/meta/{}/{}/{}",
             GOG_CDN_URL,
-            &depot_manifest[0..2],
-            &depot_manifest[2..4],
-            depot_manifest
+            &depot.manifest[0..2],
+            &depot.manifest[2..4],
+            depot.manifest
         ))
         .unwrap();
 
-        let depot_info = self.session.get_json::<DepotInfo>(url, None, true).await?;
+        let mut depot_info = self
+            .session
+            .get_json::<DepotInfo>(url, None, true)
+            .await
+            .unwrap();
+        depot_info.set_is_gog_depot(depot.is_gog_depot.unwrap_or(false));
         Ok(depot_info)
     }
     pub async fn get_secure_links(
@@ -198,6 +212,12 @@ impl Cdn {
 pub struct DepotInfo {
     pub depot: Item,
     pub version: u64,
+    pub is_gog_depot: Option<bool>,
+}
+impl DepotInfo {
+    pub fn set_is_gog_depot(&mut self, is_gog_depot: bool) {
+        self.is_gog_depot = Some(is_gog_depot);
+    }
 }
 
 #[derive(Deserialize, Debug)]
@@ -210,13 +230,21 @@ pub struct DepotFile {
     pub path: String,
     #[serde(rename = "type")]
     pub file_type: String,
-    pub chunks: Vec<Chunk>,
+    pub chunks: Option<Vec<Chunk>>,
     pub sha256: Option<String>,
+    pub is_gog_depot: Option<bool>,
+}
+impl DepotFile {
+    pub fn set_is_gog_depot(&mut self, is_gog_depot: bool) {
+        self.is_gog_depot = Some(is_gog_depot);
+    }
 }
 
 impl DepotFile {
     pub fn get_size(&self) -> u64 {
-        self.chunks.iter().map(|chunk| chunk.size).sum()
+        self.chunks
+            .as_ref()
+            .map_or(0, |chunks| chunks.iter().map(|chunk| chunk.size).sum())
     }
 }
 
@@ -250,6 +278,8 @@ pub struct BuildMetadata {
 pub struct Depots {
     pub manifest: String,
     pub size: u64,
+    #[serde(rename = "isGogDepot")]
+    pub is_gog_depot: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
