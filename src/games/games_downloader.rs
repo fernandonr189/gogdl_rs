@@ -33,7 +33,13 @@ impl GamesDownloader {
         is_gog_depot: bool,
     ) -> Result<(), SessionError> {
         for cdn in cdns {
-            let url = cdn.parse_url(chunk_hash);
+            let url = {
+                if is_gog_depot {
+                    cdn.parse_url_redist(chunk_hash)
+                } else {
+                    cdn.parse_url(chunk_hash)
+                }
+            };
 
             match self
                 .session
@@ -172,6 +178,15 @@ pub struct Cdn {
     pub priority: u64,
 }
 impl Cdn {
+    pub fn parse_url_redist(&self, chunk_hash: &str) -> String {
+        let url = format!(
+            "https://gog-cdn-fastly.gog.com/content-system/v2/dependencies/store/{}/{}/{}",
+            &chunk_hash[0..2],
+            &chunk_hash[2..4],
+            chunk_hash
+        );
+        url
+    }
     pub fn parse_url(&self, chunk_hash: &str) -> String {
         let mut url = self.url_format.clone();
         url = url.replace("{path}", &self.parameters.path);
