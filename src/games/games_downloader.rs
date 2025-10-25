@@ -3,7 +3,10 @@ use std::sync::Arc;
 use chrono::{DateTime, FixedOffset};
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
-use tokio::sync::{Mutex, mpsc::UnboundedSender};
+use tokio::{
+    io::AsyncWriteExt,
+    sync::{Mutex, mpsc::UnboundedSender},
+};
 
 use crate::{
     Session,
@@ -29,7 +32,7 @@ impl GamesDownloader {
         &self,
         cdns: &Vec<Cdn>,
         chunk_hash: &str,
-        tx: UnboundedSender<i32>,
+        tx: UnboundedSender<i64>,
         is_gog_depot: bool,
     ) -> Result<(), SessionError> {
         for cdn in cdns {
@@ -43,22 +46,67 @@ impl GamesDownloader {
 
             match self
                 .session
-                .download_chunk(Url::parse(&url).unwrap(), |i| {
-                    tx.send(i).unwrap();
+                .download_chunk(Url::parse(&url).unwrap(), |i| match tx.send(i) {
+                    Ok(_) => {}
+                    Err(err) => println!("Error sending chunk: {}", err),
                 })
                 .await
             {
                 Ok(_) => return Ok(()),
-                Err(e) => {
-                    println!("Error: {}, trying again", e);
+                Err(err) => {
+                    println!("Error: {}, trying again", err);
                     println!("Url: {}", url);
-                    continue;
+                    let url = {
+                        if is_gog_depot {
+                            cdn.parse_url(chunk_hash)
+                        } else {
+                            cdn.parse_url_redist(chunk_hash)
+                        }
+                    };
+                    match self
+                        .session
+                        .download_chunk(Url::parse(&url).unwrap(), |i| match tx.send(i) {
+                            Ok(_) => {}
+                            Err(err) => println!("Error sending chunk: {}", err),
+                        })
+                        .await
+                    {
+                        Ok(_) => return Ok(()),
+                        Err(err) => {
+                            println!("Error: {}, trying again", err);
+                            println!("Url: {}", url);
+                            continue;
+                        }
+                    }
                 }
             }
         }
-        Err(SessionError::DownloadError(
-            "All CDN attempts failed".to_string(),
-        ))
+        {
+            if is_gog_depot {
+                let mut file = tokio::fs::OpenOptions::new()
+                    .append(true)
+                    .create(true)
+                    .open("/home/fernando/gogdl_rs.log")
+                    .await
+                    .expect("Failed to open file");
+                file.write_all(format!("REDIST_FILE: {}\n", chunk_hash).as_bytes())
+                    .await
+                    .expect("Could not write log");
+            } else {
+                let mut file = tokio::fs::OpenOptions::new()
+                    .append(true)
+                    .create(true)
+                    .open("/home/fernando/gogdl_rs.log")
+                    .await
+                    .expect("Failed to open file");
+                file.write_all(format!("GAME_FILE: {}\n", chunk_hash).as_bytes())
+                    .await
+                    .expect("Could not write log");
+            }
+            return Err(SessionError::DownloadError(
+                "All CDN attempts failed".to_string(),
+            ));
+        }
     }
     pub async fn get_game_details(&self, game_id: u64) -> Result<GogDbGameDetails, SessionError> {
         let url = Url::parse(&format!(
@@ -257,9 +305,9 @@ impl DepotFile {
 
 impl DepotFile {
     pub fn get_size(&self) -> u64 {
-        self.chunks
-            .as_ref()
-            .map_or(0, |chunks| chunks.iter().map(|chunk| chunk.size).sum())
+        self.chunks.as_ref().map_or(0, |chunks| {
+            chunks.iter().map(|chunk| chunk.compressed_size).sum()
+        })
     }
 }
 

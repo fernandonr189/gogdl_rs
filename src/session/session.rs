@@ -2,6 +2,7 @@ use flate2::read::ZlibDecoder;
 use futures_util::StreamExt;
 use reqwest::{StatusCode, Url};
 use std::{error::Error, fmt::Display, io::Read};
+use tokio::io::AsyncWriteExt;
 
 #[derive(Clone)]
 pub struct Session {
@@ -16,7 +17,7 @@ impl Session {
     }
     pub async fn download_chunk<F>(&self, url: Url, callback: F) -> Result<(), SessionError>
     where
-        F: Fn(i32),
+        F: Fn(i64),
     {
         let response = self
             .session
@@ -35,7 +36,7 @@ impl Session {
         let mut stream = response.bytes_stream();
         while let Some(item) = stream.next().await {
             match item {
-                Ok(chunk) => callback(chunk.len() as i32),
+                Ok(chunk) => callback(chunk.len() as i64),
                 Err(e) => {
                     return Err(SessionError::NetworkError(e.to_string()));
                 }
@@ -52,7 +53,7 @@ impl Session {
     where
         T: serde::de::DeserializeOwned,
     {
-        let mut request = self.session.get(url);
+        let mut request = self.session.get(url.clone());
         if let Some(token) = auth_token {
             request = request.header("Authorization", format!("Bearer {}", token));
         }
@@ -74,6 +75,15 @@ impl Session {
             let mut d = ZlibDecoder::new(&bytes[..]);
             let mut s = String::new();
             d.read_to_string(&mut s).unwrap();
+            let mut file = tokio::fs::OpenOptions::new()
+                .append(true)
+                .create(true)
+                .open("/home/fernando/gogdl_rs_links.log")
+                .await
+                .expect("Failed to open file");
+            file.write_all(format!("{}\n{}", s, url.to_string()).as_bytes())
+                .await
+                .expect("Could not write log");
             match serde_json::from_str::<T>(&s) {
                 Ok(data) => Ok(data),
                 Err(err) => Err(SessionError::DeserializationError(err.to_string())),
