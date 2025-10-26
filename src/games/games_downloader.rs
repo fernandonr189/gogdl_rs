@@ -34,7 +34,7 @@ impl GamesDownloader {
         chunk_hash: &str,
         tx: UnboundedSender<i64>,
         is_gog_depot: bool,
-    ) -> Result<(), SessionError> {
+    ) -> Result<Vec<u8>, SessionError> {
         for cdn in cdns {
             let url = {
                 if is_gog_depot {
@@ -52,7 +52,7 @@ impl GamesDownloader {
                 })
                 .await
             {
-                Ok(_) => return Ok(()),
+                Ok(buffer) => return Ok(buffer),
                 Err(err) => {
                     println!("Error: {}, trying again", err);
                     println!("Url: {}", url);
@@ -71,7 +71,7 @@ impl GamesDownloader {
                         })
                         .await
                     {
-                        Ok(_) => return Ok(()),
+                        Ok(buffer) => return Ok(buffer),
                         Err(err) => {
                             println!("Error: {}, trying again", err);
                             println!("Url: {}", url);
@@ -288,7 +288,7 @@ pub struct Item {
     pub items: Vec<DepotFile>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct DepotFile {
     pub path: String,
     #[serde(rename = "type")]

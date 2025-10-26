@@ -15,7 +15,7 @@ impl Session {
             session: reqwest::Client::new(),
         }
     }
-    pub async fn download_chunk<F>(&self, url: Url, callback: F) -> Result<(), SessionError>
+    pub async fn download_chunk<F>(&self, url: Url, callback: F) -> Result<Vec<u8>, SessionError>
     where
         F: Fn(i64),
     {
@@ -32,17 +32,24 @@ impl Session {
                 response.status()
             )));
         }
+        let mut buffer: Vec<u8> = Vec::new();
 
         let mut stream = response.bytes_stream();
         while let Some(item) = stream.next().await {
             match item {
-                Ok(chunk) => callback(chunk.len() as i64),
+                Ok(chunk) => {
+                    callback(chunk.len() as i64);
+                    buffer.extend_from_slice(&chunk);
+                }
                 Err(e) => {
                     return Err(SessionError::NetworkError(e.to_string()));
                 }
             }
         }
-        Ok(())
+        let mut decompressed_buffer: Vec<u8> = Vec::new();
+        let mut decoder = ZlibDecoder::new(&buffer[..]);
+        decoder.read_to_end(&mut decompressed_buffer).unwrap();
+        Ok(decompressed_buffer)
     }
     pub async fn get_json<T>(
         &self,
