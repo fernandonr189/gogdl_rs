@@ -185,7 +185,7 @@ impl GamesDownloader {
     }
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize)]
 pub struct GogDbGameDetails {
     pub title: Option<String>,
     pub image_boxart: Option<String>,
@@ -200,13 +200,13 @@ impl GogDbGameDetails {
     }
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug)]
 pub struct SecureLinksResponse {
     pub product_id: u64,
     pub urls: Vec<Cdn>,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct CdnUrlParams {
     pub base_url: String,
     pub path: String,
@@ -219,7 +219,7 @@ pub struct CdnUrlParams {
     pub l: Option<String>,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug)]
 pub struct Cdn {
     pub url_format: String,
     pub parameters: CdnUrlParams,
@@ -288,7 +288,7 @@ pub struct Item {
     pub items: Vec<DepotFile>,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug)]
 pub struct DepotFile {
     pub path: String,
     #[serde(rename = "type")]
@@ -311,7 +311,7 @@ impl DepotFile {
     }
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug)]
 pub struct Chunk {
     pub md5: String,
     pub size: u64,
