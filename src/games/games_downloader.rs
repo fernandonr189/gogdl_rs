@@ -185,7 +185,7 @@ impl GamesDownloader {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct GogDbGameDetails {
     pub title: Option<String>,
     pub image_boxart: Option<String>,
