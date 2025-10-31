@@ -82,27 +82,6 @@ impl GamesDownloader {
             }
         }
         {
-            if is_gog_depot {
-                let mut file = tokio::fs::OpenOptions::new()
-                    .append(true)
-                    .create(true)
-                    .open("/home/fernando/gogdl_rs.log")
-                    .await
-                    .expect("Failed to open file");
-                file.write_all(format!("REDIST_FILE: {}\n", chunk_hash).as_bytes())
-                    .await
-                    .expect("Could not write log");
-            } else {
-                let mut file = tokio::fs::OpenOptions::new()
-                    .append(true)
-                    .create(true)
-                    .open("/home/fernando/gogdl_rs.log")
-                    .await
-                    .expect("Failed to open file");
-                file.write_all(format!("GAME_FILE: {}\n", chunk_hash).as_bytes())
-                    .await
-                    .expect("Could not write log");
-            }
             return Err(SessionError::DownloadError(
                 "All CDN attempts failed".to_string(),
             ));

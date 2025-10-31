@@ -82,15 +82,6 @@ impl Session {
             let mut d = ZlibDecoder::new(&bytes[..]);
             let mut s = String::new();
             d.read_to_string(&mut s).unwrap();
-            let mut file = tokio::fs::OpenOptions::new()
-                .append(true)
-                .create(true)
-                .open("/home/fernando/gogdl_rs_links.log")
-                .await
-                .expect("Failed to open file");
-            file.write_all(format!("{}\n{}", s, url.to_string()).as_bytes())
-                .await
-                .expect("Could not write log");
             match serde_json::from_str::<T>(&s) {
                 Ok(data) => Ok(data),
                 Err(err) => Err(SessionError::DeserializationError(err.to_string())),
